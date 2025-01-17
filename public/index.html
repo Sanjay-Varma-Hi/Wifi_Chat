@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WiFi Chat App</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+    body.light {
+      background: #f3f3f3;
+      color: #333;
+    }
+    body.dark {
+      background: #333;
+      color: #f3f3f3;
+    }
+    #welcome, #chat {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      width: 100%;
+      max-width: 400px;
+      border-radius: 10px;
+      box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.2);
+      transition: background-color 0.3s ease;
+    }
+    #welcome.active, #chat.active {
+      display: flex;
+    }
+    input, button {
+      margin: 10px 0;
+      padding: 12px;
+      font-size: 1rem;
+      border-radius: 5px;
+      border: none;
+      outline: none;
+    }
+    #inputContainer {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+    }
+    #messageInput {
+      flex-grow: 1;
+    }
+    #messages {
+      list-style-type: none;
+      padding: 0;
+      max-height: 300px;
+      overflow-y: auto;
+      width: 100%;
+      border-radius: 5px;
+    }
+    .message {
+      display: flex;
+      align-items: flex-start;
+      padding: 10px;
+      margin: 5px;
+      border-radius: 5px;
+    }
+    .avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      margin-right: 10px;
+      flex-shrink: 0;
+    }
+    .message-content {
+      flex-grow: 1;
+    }
+    .username {
+      font-weight: bold;
+      margin-right: 5px;
+    }
+    .timestamp {
+      font-size: 0.8rem;
+      color: gray;
+      margin-left: 10px;
+    }
+    #typingIndicator {
+      font-style: italic;
+      font-size: 0.9rem;
+      margin: 10px 0;
+      display: none;
+    }
+    button.toggle-theme {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: none;
+      border: none;
+      font-size: 1rem;
+      color: inherit;
+      cursor: pointer;
+    }
+  </style>
+  <script src="https://cdn.socket.io/4.5.1/socket.io.min.js"></script>
+</head>
+<body class="light">
+  <button class="toggle-theme" onclick="toggleTheme()">Switch Theme</button>
+
+  <!-- Welcome Screen -->
+  <div id="welcome" class="active">
+    <h1>Welcome to WiFi Chat</h1>
+    <input type="text" id="username" placeholder="Enter your name">
+    <button onclick="joinChat()">Join</button>
+  </div>
+
+  <!-- Chat Screen -->
+  <div id="chat">
+    <h1>WiFi Chat Room</h1>
+    <ul id="messages"></ul>
+    <p id="typingIndicator">Someone is typing...</p>
+    <div id="inputContainer">
+      <input type="text" id="messageInput" placeholder="Type a message" oninput="notifyTyping()">
+      <button onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+
+  <script>
+    const socket = io('http://localhost:3000');
+    const avatars = [
+      'https://i.pravatar.cc/40?img=1',
+      'https://i.pravatar.cc/40?img=2',
+      'https://i.pravatar.cc/40?img=3',
+      'https://i.pravatar.cc/40?img=4',
+      'https://i.pravatar.cc/40?img=5'
+    ];
+    let userAvatar;
+
+    function joinChat() {
+      const username = document.getElementById('username').value;
+      if (username.trim() === '') {
+        alert('Please enter your name');
+        return;
+      }
+
+      userAvatar = avatars[Math.floor(Math.random() * avatars.length)];
+      socket.emit('joinRoom', { username, avatar: userAvatar });
+
+      document.getElementById('welcome').classList.remove('active');
+      document.getElementById('chat').classList.add('active');
+    }
+
+    socket.on('message', ({ username, text, avatar, timestamp }) => {
+      const messages = document.getElementById('messages');
+      const messageItem = document.createElement('li');
+      messageItem.classList.add('message');
+
+      const avatarImg = document.createElement('img');
+      avatarImg.src = avatar || 'https://i.pravatar.cc/40';
+      avatarImg.alt = username;
+      avatarImg.classList.add('avatar');
+
+      const messageContent = document.createElement('div');
+      messageContent.classList.add('message-content');
+
+      const messageHeader = document.createElement('div');
+      const usernameSpan = document.createElement('span');
+      usernameSpan.textContent = username;
+      usernameSpan.classList.add('username');
+
+      const timestampSpan = document.createElement('span');
+      timestampSpan.textContent = timestamp;
+      timestampSpan.classList.add('timestamp');
+
+      const messageText = document.createElement('p');
+      messageText.textContent = text;
+
+      messageHeader.appendChild(usernameSpan);
+      messageHeader.appendChild(timestampSpan);
+      messageContent.appendChild(messageHeader);
+      messageContent.appendChild(messageText);
+      messageItem.appendChild(avatarImg);
+      messageItem.appendChild(messageContent);
+
+      messages.appendChild(messageItem);
+      messages.scrollTop = messages.scrollHeight;
+    });
+
+    socket.on('typing', () => {
+      document.getElementById('typingIndicator').style.display = 'block';
+    });
+
+    socket.on('stopTyping', () => {
+      document.getElementById('typingIndicator').style.display = 'none';
+    });
+
+    function sendMessage() {
+      const message = document.getElementById('messageInput').value;
+      if (message.trim() === '') {
+        alert('Message cannot be empty');
+        return;
+      }
+
+      socket.emit('chatMessage', message);
+      document.getElementById('messageInput').value = '';
+      socket.emit('stopTyping');
+    }
+
+    function notifyTyping() {
+      socket.emit('typing');
+      setTimeout(() => socket.emit('stopTyping'), 2000);
+    }
+
+    function toggleTheme() {
+      document.body.classList.toggle('dark');
+      document.body.classList.toggle('light');
+    }
+  </script>
+</body>
+</html>
